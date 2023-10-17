@@ -1,0 +1,238 @@
+---
+- hosts: all
+  become: true
+  pre_tasks:
+
+  - name: install update and repositories (CentOS)
+    tags: always
+    yum:
+      name: "*"
+      update_cache: yes
+      state: latest
+    changed_when: false
+    when: ansible_distribution == "CentOS"
+
+  - name: install update and repositories (Ubuntu)
+    tags: always
+    apt:
+      upgrade: yes
+      update_cache: yes
+      cache_valid_time: 86400
+    changed_when: false
+    when: ansible_distribution == "Ubuntu"
+
+- hosts: remote_servers
+  become: true
+  tasks:
+
+  - name: nagios libraries and dependencies (Ubuntu)
+    tags: ubuntu, dependencies, libraries
+    apt:
+      name:
+        - autoconf
+        - libc6
+        - gcc
+        - make
+        - wget
+        - unzip
+        - apache2
+        - php
+        - libapache2-mod-php
+        - libgd-dev
+        - openssl
+        - libssl-dev
+        - bc
+        - gawk
+        - dc
+        - build-essential
+        - snmp
+        - libnet-snmp-perl
+        - gettext
+        - python3
+        - python3-pip
+      state: latest
+    when: ansible_distribution == "Ubuntu"
+
+  - name: passlib package (Ubuntu)
+    pip:
+      name: passlib
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Creating a directory for nagios (Ubuntu)
+    file:
+      path: ~/nagios
+      state: directory
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Downloading and extracting Nagios (Ubuntu)
+    unarchive:
+      src: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.6.tar.gz
+      dest: ~/nagios
+      remote_src: yes
+      mode: 0777
+      owner: root
+      group: root
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Downloading and extracting Nagios plugins (Ubuntu)
+    unarchive:
+      src: https://github.com/nagios-plugins/nagios-plugins/archive/release-2.3.3.tar.gz
+      dest: ~/nagios
+      remote_src: yes
+      mode: 0777
+      owner: root
+      group: root
+    when: ansible_distribution == "Ubuntu"
+
+  - name: install, compile, adding users and groups in Nagios (Ubuntu)
+    shell: |
+      cd ~/nagios/nagioscore-*
+      sudo ./configure --with-httpd-conf=/etc/apache2/sites-enabled
+      sudo make all
+      sudo make install-groups-users
+      sudo usermod -a -G nagios www-data
+      sudo make install
+      sudo make install-daemoninit
+      sudo make install-commandmode
+      sudo make install-config
+      sudo make install-webconf
+      sudo a2enmod rewrite
+      sudo a2enmod cgi
+    when: ansible_distribution == "Ubuntu"
+
+  - name: compile and install plugins (Ubuntu)
+    shell: |
+      cd ~/nagios/nagios-plugins*
+      ./tools/setup
+      ./configure
+      make
+      make install
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Add a user and permissions  (Ubuntu)
+    community.general.htpasswd:
+      path: /usr/local/nagios/etc/htpasswd.users
+      name: chrysler
+      password: chrysler
+    when: ansible_distribution == "Ubuntu"
+
+  - name: starting/enabling nagios (Ubuntu)
+    service:
+      name: nagios
+      state: restarted
+      enabled: true
+    when: ansible_distribution == "Ubuntu"
+
+  - name: starting/enabling apache2 (Ubuntu)
+    service:
+      name: apache2
+      state: restarted
+      enabled: true
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Installing nagios dependecies and libraries (CentOS)
+    tags: dependecies, libraries
+    yum:
+      name:
+        - gcc
+        - glibc
+        - glibc-common
+        - perl
+        - httpd
+        - php
+        - wget
+        - gd
+        - gd-devel
+        - openssl-devel
+        - gcc
+        - glibc
+        - glibc-common
+        - make
+        - gettext
+        - automake
+        - autoconf
+        - wget
+        - openssl-devel
+        - net-snmp
+        - net-snmp-utils
+        - python3-pip
+      state: present
+    when: ansible_distribution == "CentOS"
+
+  - name: Install passlib python package (CentOS)
+    pip:
+      executable: /usr/bin/pip3
+      name: passlib
+    when: ansible_distribution == "CentOS"
+
+  - name: Creating a directory for nagios (CentOS)
+    file:
+      path: ~/nagios
+      state: directory
+    when: ansible_distribution == "CentOS"
+
+  - name: Downloading and extracting Nagios (CentOS)
+    unarchive:
+      src: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.6.tar.gz
+      dest: ~/nagios
+      remote_src: yes
+      mode: 0777
+      owner: root
+      group: root
+    when: ansible_distribution == "CentOS"
+
+  - name: Downloading and extracting Nagios plugins (CentOS)
+    unarchive:
+      src: https://github.com/nagios-plugins/nagios-plugins/archive/release-2.3.3.tar.gz
+      dest: ~/nagios
+      remote_src: yes
+      mode: 0777
+      owner: root
+      group: root
+    when: ansible_distribution == "CentOS"
+
+  - name: Compiling, installing, and adding users and groups in nagios (CentOS)
+    shell: |
+      cd ~/nagios/nagioscore-**
+      ./configure
+      make all
+      make install-groups-users
+      usermod -a -G nagios apache
+      make install
+      make install-daemoninit
+      make install-commandmode
+      make install-config
+      make install-webconf
+    when: ansible_distribution == "CentOS"
+
+  - name: Compiling and installing plugins (CentOS)
+    shell: |
+      cd ~/nagios/nagios-plugins*
+      ./tools/setup
+      ./configure
+      make
+      make install
+    when: ansible_distribution == "CentOS"
+
+  - name: Add a user and permissions (CentOS)
+    community.general.htpasswd:
+      path: /usr/local/nagios/etc/htpasswd.users
+      name: chrysler
+      password: chrysler
+    when: ansible_distribution == "CentOS"
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+
+  - name: starting/enabling nagios (CentOS)
+    service:
+      name: nagios
+      state: restarted
+      enabled: true
+    when: ansible_distribution == "CentOS"
+
+  - name: starting/enabling apache2 (CentOS)
+    service:
+      name: httpd
+      state: restarted
+      enabled: true
+    when: ansible_distribution == "CentOS"
